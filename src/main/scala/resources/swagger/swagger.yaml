@@ -1,0 +1,108 @@
+swagger: '2.0'
+info:
+  description: The API to manage books. User can register/borrow books.
+  version: 0.0.1
+  title: Youshu Ren Club
+  contact:
+    name: developer
+    email: xx@xx.com
+basePath: /api
+securityDefinitions:
+  oauth2:
+    type: oauth2
+    tokenUrl: https://dummy-token.com
+    flow: application
+    scopes:
+      youshuren.club.write: Can write book data
+      youshuren.club.read: Can read book data
+tags:
+  - name: books
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+  - application/problem+json
+
+paths:
+  /books:
+    get:
+      tags:
+        - books
+      summary: Get defined books
+      parameters:
+        - $ref: '#/parameters/Authorization'
+        - $ref: '#/parameters/OnlyAvailableQueryParam'
+        - $ref: '#/parameters/BookNameQueryParam'
+      responses:
+        200:
+          description: successful operation
+          schema:
+            $ref: '#/definitions/BookPage'
+      security:
+        - oauth2:
+          - youshuren.club.read
+
+    post:
+      tags:
+        - books
+      summary: Create a new book
+      parameters:
+        - $ref: '#/parameters/Authorization'
+        - in: body
+          name: book
+          required: true
+          schema:
+            $ref: '#/definitions/Book'
+      responses:
+        201:
+          description: Book has been successful created
+        400:
+          description: Cannot create
+      security:
+        - oauth2:
+          - youshuren.club.write
+
+parameters:
+  Authorization:
+    name: Authorization
+    description: Bearer authorization token
+    in: header
+    type: string
+    required: true
+
+  OnlyAvailableQueryParam:
+    name: only_available
+    description: A query parameter to request only available books
+    in: query
+    type: boolean
+    required: false
+
+  BookNameQueryParam:
+    name: book_name
+    description: The name for a book
+    in: query
+    type: string
+    required: false
+
+definitions:
+  Book:
+    type: object
+    required:
+      - name
+      - owner
+    properties:
+      name:
+        type: string
+        example: 乡关何处
+
+  BookPage:
+    type: object
+    required:
+      - items
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/Book'
