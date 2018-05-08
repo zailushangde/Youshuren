@@ -17,7 +17,7 @@ object Database {
 
   def apply[A : Database]: Database[A] = implicitly[Database[A]]
 
-  implicit val userDatabase = new Database[WeChatUser] with Redis {
+  implicit val userDatabase = new Database[WeChatUser] with Postgres {
 
     override def post(a: WeChatUser): Either[Throwable, String] = ???
 
@@ -34,7 +34,7 @@ object Database {
     override def deleteByName(name: String): Boolean = ???
   }
 
-  implicit val bookDatabase = new Database[Book] with Redis {
+  implicit val bookDatabase = new Database[Book] with Postgres {
 
     override def post(a: Book): Either[Throwable, String] = ???
 
