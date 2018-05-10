@@ -10,6 +10,8 @@ enablePlugins(DockerPlugin)
 enablePlugins(AshScriptPlugin)
 dockerBaseImage := "openjdk:8-jre-alpine"
 
+mainClass in Compile := Some("org.youshuren.main.Application")
+
 lazy val doobieVersion = "0.5.2"
 lazy val akkaVersion = "2.5.11"
 lazy val akkaHttpVersion = "10.1.0"
