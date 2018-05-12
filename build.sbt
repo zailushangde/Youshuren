@@ -5,9 +5,7 @@ version := "0.1"
 scalaVersion := "2.12.6"
 scalacOptions += "-Ypartial-unification"
 
-enablePlugins(JavaAppPackaging)
-enablePlugins(DockerPlugin)
-enablePlugins(AshScriptPlugin)
+enablePlugins(JavaAppPackaging, DockerPlugin, AshScriptPlugin)
 dockerBaseImage := "openjdk:8-jre-alpine"
 
 mainClass in Compile := Some("org.youshuren.main.Application")
@@ -17,6 +15,8 @@ lazy val akkaVersion = "2.5.11"
 lazy val akkaHttpVersion = "10.1.0"
 lazy val catsVersion = "1.1.0"
 lazy val catsEffectVersion = "0.10.1"
+lazy val pureConfigVersion = "0.9.1"
+lazy val scalaTestVersion = "3.0.5"
 
 libraryDependencies := Seq(
   "com.typesafe.akka" %% "akka-actor"  % akkaVersion,
@@ -29,9 +29,12 @@ libraryDependencies := Seq(
 
   "org.tpolecat" %% "doobie-core"     % doobieVersion,
   "org.tpolecat" %% "doobie-postgres" % doobieVersion,
+  "org.tpolecat" %% "doobie-hikari"   % doobieVersion,
   "org.tpolecat" %% "doobie-specs2"   % doobieVersion,
 
-  "org.scalatest"     %% "scalatest"         % "3.0.5"  % Test,
-  "com.typesafe.akka" %% "akka-testkit"      % "2.5.11" % Test,
-  "com.typesafe.akka" %% "akka-http-testkit" % "10.1.0" % Test
+  "com.github.pureconfig" %% "pureconfig" % pureConfigVersion,
+
+  "org.scalatest"     %% "scalatest"         % scalaTestVersion % Test,
+  "com.typesafe.akka" %% "akka-testkit"      % akkaVersion % Test,
+  "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpVersion % Test
 )
