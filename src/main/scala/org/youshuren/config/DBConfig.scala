@@ -8,6 +8,6 @@ case class PostgresConfig(driver: String,
                           password: String,
                           tables: DBTables)
 
-case class DBTables(wechatUsers: String,
+case class DBTables(wechatusers: String,
                     wegroups: String,
                     books: String)

@@ -1,7 +1,6 @@
 package org.youshuren.endpoint
 
 import org.youshuren._
-import akka.event.Logging
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import org.youshuren.persistence.Database
@@ -76,7 +75,7 @@ object Routes {
         post { decodeRequest { entity(as[Book]) { book =>
           val saveBook = Database[Book].post(book)
           onCompleteWithBreaker(circuitBreaker)(saveBook.unsafeToFuture) {
-            case Success(Right(res)) => complete(200 -> res)
+            case Success(Right(res)) => complete(201 -> res)
             case Success(Left(err))  => complete(500 -> err)
             case Failure(err)        => complete(500 -> err)
           }
@@ -88,7 +87,7 @@ object Routes {
             case Success(Left(err))  => complete(500 -> err)
             case Failure(err)        => complete(500 -> err)
           }
-        }}}
+        }}} ~
         delete {
           val deleteBook = Database[Book].deleteById(bookId)
           onCompleteWithBreaker(circuitBreaker)(deleteBook.unsafeToFuture) {
@@ -104,7 +103,7 @@ object Routes {
         get {
           val getBookByName = Database[Book].getByName(bookName)
           onCompleteWithBreaker(circuitBreaker)(getBookByName.unsafeToFuture) {
-            case Success(Right(Some(book))) => complete(book)
+            case Success(Right(Some(book))) => complete(200 -> book)
             case Success(Right(None))       => complete(404 -> s"book not found")
             case Success(Left(error))       => complete(500 -> error)
             case Failure(error)             => complete(500 -> error)
@@ -127,8 +126,11 @@ object Routes {
               // TODO: query lending table to determine availability of the book
             val getBooks = Database[Book].collect(onlyAvailable)
             onComplete(getBooks.unsafeToFuture) {
-              case Success(books) => complete(books)
-              case Failure(error) =>
+              case Success(Right(books)) => complete(200 -> books)
+              case Success(Left(error))  =>
+                log.error("Error in getting all the books: {}", error)
+                complete(500 -> error)
+              case Failure(error)        =>
                 log.error("failed to fetch books from db, error {}", error)
                 complete(500 -> error)
             }
@@ -150,11 +152,39 @@ object Routes {
         post { decodeRequest { entity(as[WeChatUser]) { user =>
           val saveUser = Database[WeChatUser].post(user)
           onCompleteWithBreaker(circuitBreaker)(saveUser.unsafeToFuture) {
+            case Success(Right(res)) => complete(201 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        }}} ~
+        put { decodeRequest { entity(as[WeChatUser]) { user =>
+          val updateUser = Database[WeChatUser].put(user)
+          onCompleteWithBreaker(circuitBreaker)(updateUser.unsafeToFuture) {
             case Success(Right(res)) => complete(200 -> res)
             case Success(Left(err))  => complete(500 -> err)
             case Failure(err)        => complete(500 -> err)
           }
-        }}}
+        }}} ~
+        delete {
+          val deleteUser = Database[WeChatUser].deleteById(userId)
+          onCompleteWithBreaker(circuitBreaker)(deleteUser.unsafeToFuture) {
+            case Success(Right(res)) => complete(200 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        }
+      }
+    } ~
+    path(Users) {
+      headerValueByName("Authorization") { token => //TODO: implement authentication
+        get {
+          val getAllUsers = Database[WeChatUser].collect(true)
+          onCompleteWithBreaker(circuitBreaker)(getAllUsers.unsafeToFuture) {
+            case Success(Right(res)) => complete(200 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        }
       }
     }
   }

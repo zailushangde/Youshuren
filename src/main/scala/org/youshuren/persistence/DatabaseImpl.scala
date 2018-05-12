@@ -91,11 +91,11 @@ object Postgres {
   object Update {
 
     val insertWeChatUser: WeChatUser => Update0 = user =>
-      sql"INSERT INTO wechatusers VALUES (${user.id}, ${user.nickName})".update
+      sql"INSERT INTO wechatusers VALUES (${user.id}, ${user.nickName}) ON CONFLICT (id) DO NOTHING".update
     val insertWegroup: WeGroup => Update0 = group =>
-      sql"INSERT INTO wegroups VALUES (${group.id}, ${group.nickName})".update
+      sql"INSERT INTO wegroups VALUES (${group.id}, ${group.nickName}) ON CONFLICT (id) DO NOTHING".update
     val insertBook: Book => Update0 = book =>
-      sql"INSERT INTO books VALUES (${book.id}, ${book.name}, ${book.owner}, ${book.isAvailable})".update
+      sql"INSERT INTO books VALUES (${book.id}, ${book.name}, ${book.owner}, ${book.isAvailable}) ON CONFLICT (id) DO NOTHING".update
     val updateWeChatUser: WeChatUser => Update0 = user =>
       sql"UPDATE FROM books SET name = ${user.nickName} WHERE id = ${user.id}".update
     val updateBook: Book => Update0 = book =>
@@ -130,7 +130,7 @@ object Postgres {
     config = postgresConfig
     val init: ConnectionIO[String] = for {
       _ <- createUsersTable.run
-      _ =  log.info("{} table initialized.", config.tables.wechatUsers)
+      _ =  log.info("{} table initialized.", config.tables.wechatusers)
       _ <- createBooksTable.run
       _ =  log.info("{} table initialized.", config.tables.books)
     } yield "Postgres started"
