@@ -15,6 +15,7 @@ trait DatabaseImpl
 trait Postgres extends DatabaseImpl {
 
   import Postgres._
+  import org.youshuren.persistence.queries.BookQueries
 
   def insert(user: User): Result[Int] = user match {
     case user: WeChatUser => execute(Update.insertWeChatUser(user) run)
@@ -25,7 +26,12 @@ trait Postgres extends DatabaseImpl {
     case book: Book => execute(Update.insertBook(book) run)
   }
 
-  def getWeChatUserById(id: String): Result[Vector[WeChatUser]] = execute(Query.getUserById(id).to[Vector])
+//  def getWeChatUserById(id: String): Result[Vector[WeChatUser]] = execute(Query.getUserById(id).to[Vector])
+  def getWeChatUserById(id: String): Result[List[WeChatUser]] = {
+    execute(BookQueries
+      .getUserById(id)
+      .to[List])
+  }
 
   def getUserByNickName(nickName: String): Result[Vector[WeChatUser]] = execute(Query.getUserByNickName(nickName).to[Vector])
 

@@ -6,7 +6,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import org.youshuren.persistence.Database
 import org.youshuren.model.{Book, WeChatUser}
-import org.youshuren.codec.JsonFormats._
+import org.youshuren.model.JsonFormats._
 import org.youshuren.endpoint.Routes.QueryParam._
 import org.youshuren.endpoint.Routes.Path._
 
