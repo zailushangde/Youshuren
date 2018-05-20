@@ -12,6 +12,6 @@ services:
       POSTGRES_DB: youshuren
 
   youshuren:
-    image: youshuren:0.1
+    image: tshy0931/youshuren:v6d7b91d
     ports:
       - "6666:6666"
