@@ -4,6 +4,9 @@ sealed trait User {
   def id: String
 }
 
-case class WeChatUser(id: String, nickName: String) extends User
+case class WeChatUser(id: String,
+                      nickName: String,
+                      groupId: String,
+                      avatarUrl: String) extends User
 
 case class WeGroup(id: String, nickName: String) extends User
