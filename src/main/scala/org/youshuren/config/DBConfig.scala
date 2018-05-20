@@ -10,4 +10,5 @@ case class PostgresConfig(driver: String,
 
 case class DBTables(wechatusers: String,
                     wegroups: String,
-                    books: String)
+                    books: String,
+                    rentals: String)

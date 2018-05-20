@@ -3,12 +3,13 @@ package org.youshuren.endpoint
 import org.youshuren._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import org.youshuren.persistence.Database
-import org.youshuren.model.{Book, WeChatUser}
+import akka.pattern.CircuitBreaker
+import org.youshuren.persistence.{BookPredicate, Database, Predicate}
+import org.youshuren.model.{Book, Rental, WeChatUser}
 import org.youshuren.codec.JsonFormats._
-import org.youshuren.endpoint.Routes.QueryParam._
 import org.youshuren.endpoint.Routes.Path._
 
+import scala.util.matching.Regex
 import scala.util.{Failure, Success}
 
 /**
@@ -17,31 +18,54 @@ import scala.util.{Failure, Success}
   *
   * APIs supported in current build:
   *
-  * /books/name/:bookName
-  *   - GET    : fetch the book with book name given in path parameter
-  *   - POST   : create a book with book name using details given in request body
-  *   - PUT    : update the book with given name by replacing it with the book in the request body
-  *   - DELETE : delete a book with given book name
-  *
   * /books/id/:bookId
   *   - GET    : fetch the book with book id given in path parameter
-  *   - POST   : create a book with book id using details given in request body
   *   - PUT    : update the book with given id by replacing it with the book in the request body
   *   - DELETE : delete a book with given book name
   *
+  * /books/tag/:tag[?only_available=false|true]
+  *   - GET    : fetch all the books that contain the given tag
+  *
   * /books[?only_available=false|true]
   *   - GET    : if only_available=true is given, fetch only available books, otherwise fetch all books
+  *   - POST   : create a book with book name using details given in request body
   *
   * /users
   *   - GET    : fetch all users
+  *   - POST   : create a new user with details given in request body
   *
   * /users/id/:userId
   *   - GET    : fetch user profile of given userId
-  *   - POST   : create a new user with profile given in request body
+  *   - PUT    : update the user at given Id
   *   - DELETE : delete user with given id and reset owner of the user's books
   *
   * /users/id/:userId/books
-  *   - GET : fetch books owned by user with given id
+  *   - GET    : fetch books owned by user with given id
+  *
+  * /users/id/:userId/books/tag/:tag
+  *   - GET    : fetch books owned by user with given id and tagged by given tag
+  *
+  * /rentals/
+  *   - GET    : fetch all the rentals
+  *   - POST   : create a new rental
+  *
+  * /rentals/id/:rentalId
+  *   - GET    : fetch a specific rental at given id
+  *
+  * /rentals/id/:rentalId/[approve|reject]
+  *   - PATCH  : update status of the given rental to either approved or rejected
+  *
+  * /rentals/status/:status
+  *   - GET    : fetch all the rentals having given status
+  *
+  * /rentals/owner/:ownerId
+  *   - GET    : fetch all the rentals where the given userId is owner
+  *
+  * /rentals/borrower/:borrowerId
+  *   - GET    : fetch all the rentals where the given userId is owner
+  *
+  * /rentals/book/:bookId
+  *   - GET    : fetch all the rentals on the given book
   */
 object Routes {
 
@@ -53,15 +77,24 @@ object Routes {
   object Path {
     val Books: String = "books"
     val Users: String = "users"
+    val Rentals: String = "rentals"
     val Id = "id"
     val Name = "name"
     val Owner = "owner"
+    val Tag = "tag"
+  }
+
+  object PathParam {
+    val AnyString: Regex = ".*".r
+    val UUID: Regex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}".r
+    val StatusAction: Map[String, Int] = Map("approve" -> 1, "reject" -> -1)
   }
 
   val log = logger(this.getClass)
 
   lazy val routes: Route = {
-    path(Books / Id / Remaining) { bookId =>
+
+    path(Books / Id / PathParam.AnyString) { bookId =>
       headerValueByName("Authorization") { token => //TODO: implement authentication
         get {
           val getBookById = Database[Book].getById(bookId)
@@ -72,16 +105,8 @@ object Routes {
             case Failure(error)             => complete(500 -> error)
           }
         } ~
-        post { decodeRequest { entity(as[Book]) { book =>
-          val saveBook = Database[Book].post(book)
-          onCompleteWithBreaker(circuitBreaker)(saveBook.unsafeToFuture) {
-            case Success(Right(res)) => complete(201 -> res)
-            case Success(Left(err))  => complete(500 -> err)
-            case Failure(err)        => complete(500 -> err)
-          }
-        }}} ~
         put { decodeRequest { entity(as[Book]) { book =>
-          val updateBook = Database[Book].put(book)
+          val updateBook = Database[Book].update(book)
           onCompleteWithBreaker(circuitBreaker)(updateBook.unsafeToFuture) {
             case Success(Right(res)) => complete(200 -> res)
             case Success(Left(err))  => complete(500 -> err)
@@ -98,33 +123,25 @@ object Routes {
         }
       }
     } ~
-    path(Books / Name / Remaining) { bookName =>
+    path(Books / Tag / PathParam.AnyString) { tag =>
       headerValueByName("Authorization") { token => //TODO: implement authentication
         get {
-          val getBookByName = Database[Book].getByName(bookName)
-          onCompleteWithBreaker(circuitBreaker)(getBookByName.unsafeToFuture) {
-            case Success(Right(Some(book))) => complete(200 -> book)
-            case Success(Right(None))       => complete(404 -> s"book not found")
-            case Success(Left(error))       => complete(500 -> error)
-            case Failure(error)             => complete(500 -> error)
+          val getBooksWithTag = Database[Book].collect(Predicate.AllBooksWithTag(tag))
+          onCompleteWithBreaker(circuitBreaker)(getBooksWithTag.unsafeToFuture) {
+            case Success(Right(res)) => complete(200 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
           }
-        } ~
-        post { decodeRequest { entity(as[Book]) { book =>
-          Database[Book].post(book).unsafeRunSync match {
-            case Right(id) => complete(201 -> s"book successfully saved with id $id")
-            case Left(err) =>
-              log.error("failed to post book {}, error {}", book, err)
-              complete(500 -> s"failed to post the book, error $err")
-          }
-        }}}
+        }
       }
     } ~
     path(Books) {
-      get {
-        headerValueByName("Authorization") { token => //TODO: implement authentication
-          parameter(OnlyAvailableQueryParam.as[Boolean] ? false) { onlyAvailable =>
+      headerValueByName("Authorization") { token => //TODO: implement authentication
+        get {
+          parameter(QueryParam.OnlyAvailableQueryParam.as[Boolean] ?) { onlyAvailable =>
               // TODO: query lending table to determine availability of the book
-            val getBooks = Database[Book].collect(onlyAvailable)
+            val predicate = BookPredicate(isAvailable = onlyAvailable)
+            val getBooks = Database[Book].collect(predicate)
             onComplete(getBooks.unsafeToFuture) {
               case Success(Right(books)) => complete(200 -> books)
               case Success(Left(error))  =>
@@ -135,10 +152,42 @@ object Routes {
                 complete(500 -> error)
             }
           }
+        } ~
+        post { decodeRequest { entity(as[Book]) { book =>
+          val saveBook = Database[Book].save(book)
+          onCompleteWithBreaker(circuitBreaker)(saveBook.unsafeToFuture) {
+            case Success(Right(res)) => complete(201 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        }}}
+      }
+    } ~
+    path(Users / Id / PathParam.AnyString / Books) { userId =>
+      headerValueByName("Authorization") { token => //TODO: implement authentication
+        get {
+          val getBooksOfUser = Database[Book].collect(Predicate.AllBooksOwnedByUserId(userId))
+          onCompleteWithBreaker(circuitBreaker)(getBooksOfUser.unsafeToFuture) {
+            case Success(Right(res)) => complete(200 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
         }
       }
     } ~
-    path(Users / Id / Remaining) { userId =>
+    path(Users / Id / PathParam.AnyString / Books / Tag / PathParam.AnyString) { (userId, tag) =>
+      headerValueByName("Authorization") { token => //TODO: implement authentication
+        get {
+          val getBooksOfUser = Database[Book].collect(Predicate.AllBooksOwnedByUserIdWithTag(userId)(tag))
+          onCompleteWithBreaker(circuitBreaker)(getBooksOfUser.unsafeToFuture) {
+            case Success(Right(res)) => complete(200 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        }
+      }
+    } ~
+    path(Users / Id / PathParam.AnyString) { userId =>
       headerValueByName("Authorization") { token => //TODO: implement authentication
         get {
           val getUserById = Database[WeChatUser].getById(userId)
@@ -149,16 +198,8 @@ object Routes {
             case Failure(err)               => complete(500 -> err)
           }
         } ~
-        post { decodeRequest { entity(as[WeChatUser]) { user =>
-          val saveUser = Database[WeChatUser].post(user)
-          onCompleteWithBreaker(circuitBreaker)(saveUser.unsafeToFuture) {
-            case Success(Right(res)) => complete(201 -> res)
-            case Success(Left(err))  => complete(500 -> err)
-            case Failure(err)        => complete(500 -> err)
-          }
-        }}} ~
         put { decodeRequest { entity(as[WeChatUser]) { user =>
-          val updateUser = Database[WeChatUser].put(user)
+          val updateUser = Database[WeChatUser].update(user)
           onCompleteWithBreaker(circuitBreaker)(updateUser.unsafeToFuture) {
             case Success(Right(res)) => complete(200 -> res)
             case Success(Left(err))  => complete(500 -> err)
@@ -178,8 +219,61 @@ object Routes {
     path(Users) {
       headerValueByName("Authorization") { token => //TODO: implement authentication
         get {
-          val getAllUsers = Database[WeChatUser].collect(true)
+          val getAllUsers: Result[Seq[WeChatUser]] = Database[WeChatUser].collect(Predicate.AllWechatUsers)
           onCompleteWithBreaker(circuitBreaker)(getAllUsers.unsafeToFuture) {
+            case Success(Right(res)) => complete(200 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        } ~
+        post { decodeRequest { entity(as[WeChatUser]) { user =>
+          val saveUser = Database[WeChatUser].save(user)
+          onCompleteWithBreaker(circuitBreaker)(saveUser.unsafeToFuture) {
+            case Success(Right(res)) => complete(201 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        }}}
+      }
+    } ~
+    path(Rentals) {
+      headerValueByName("Authorization") { token => //TODO: implement authentication
+        get {
+          val getAllRentals = Database[Rental].collect(Predicate.AllRentals)
+          onCompleteWithBreaker(circuitBreaker)(getAllRentals.unsafeToFuture) {
+            case Success(Right(res)) => complete(201 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        } ~
+        post { decodeRequest { entity(as[Rental]) { rental =>
+          val saveRental = Database[Rental].save(rental)
+          onCompleteWithBreaker(circuitBreaker)(saveRental.unsafeToFuture) {
+            case Success(Right(res)) => complete(201 -> res)
+            case Success(Left(err))  => complete(500 -> err)
+            case Failure(err)        => complete(500 -> err)
+          }
+        }}}
+      }
+    } ~
+    path(Rentals / Id / PathParam.UUID) { rentalId =>
+      headerValueByName("Authorization") { token => //TODO: implement authentication
+        get {
+          val getRentalById = Database[Rental].getById(rentalId)
+          onCompleteWithBreaker(circuitBreaker)(getRentalById.unsafeToFuture) {
+            case Success(Right(Some(rental))) => complete(200 -> rental)
+            case Success(Right(None))         => complete(404 -> s"rental id $rentalId not found")
+            case Success(Left(error))         => complete(500 -> error)
+            case Failure(error)               => complete(500 -> error)
+          }
+        }
+      }
+    } ~
+    path(Rentals / Id / PathParam.UUID / PathParam.StatusAction) { (rentalId, newStatus) =>
+      headerValueByName("Authorization") { token => //TODO: implement authentication
+        patch {
+          val updateRentalStatus = Database[Rental].update(Rental.statusChange(rentalId, newStatus))
+          onCompleteWithBreaker(circuitBreaker)(updateRentalStatus.unsafeToFuture) {
             case Success(Right(res)) => complete(200 -> res)
             case Success(Left(err))  => complete(500 -> err)
             case Failure(err)        => complete(500 -> err)

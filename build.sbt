@@ -1,12 +1,17 @@
 name := "Youshuren"
 
-version := "0.1"
+//version := "0.1"
 
 scalaVersion := "2.12.6"
 scalacOptions += "-Ypartial-unification"
 
-enablePlugins(JavaAppPackaging, DockerPlugin, AshScriptPlugin)
+enablePlugins(JavaAppPackaging, DockerPlugin, AshScriptPlugin, GitVersioning)
 dockerBaseImage := "openjdk:8-jre-alpine"
+dockerRepository := Some("tshy0931")
+
+git.formattedShaVersion := git.gitHeadCommit.value map {
+  sha => s"v${sha take 7}"
+}
 
 mainClass in Compile := Some("org.youshuren.main.Application")
 
