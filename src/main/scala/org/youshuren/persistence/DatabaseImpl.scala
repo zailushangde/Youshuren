@@ -10,7 +10,6 @@ import cats.effect.IO
 import org.youshuren.config.PostgresConfig
 import org.youshuren.model._
 import org.youshuren._
-import scala.language.higherKinds
 
 trait DatabaseImpl
 
@@ -20,7 +19,7 @@ trait Postgres extends DatabaseImpl {
 
   def insert(user: User): Result[Int] = user match {
     case user: WeChatUser => execute(Query.insertWechatUser(user).update.run)
-    case group: WeGroup   => IO.raiseError(new UnsupportedOperationException("Wechat group feature is TBD")).attempt
+    case _: WeGroup   => IO.raiseError(new UnsupportedOperationException("Wechat group feature is TBD")).attempt
   }
 
   def insert(artifact: Artifact): Result[Int] = artifact match {
@@ -233,16 +232,16 @@ object Postgres {
       )
       """.update
 
-  def start(postgresConfig: PostgresConfig): Either[Throwable, String] = {
+  def start(postgresConfig: PostgresConfig): Either[Throwable, Unit] = {
     config = postgresConfig
-    val init: ConnectionIO[String] = for {
+    val init: ConnectionIO[Unit] = for {
       _ <- createUsersTable.run
       _ =  log.info("{} table initialized.", config.tables.wechatusers)
       _ <- createBooksTable.run
       _ =  log.info("{} table initialized.", config.tables.books)
       _ <- createRentalsTable.run
       _ =  log.info("{} table initialized.", config.tables.rentals)
-    } yield "Postgres started"
+    } yield log.info("Postgres DB started.")
 
     execute(init).unsafeRunSync
   }

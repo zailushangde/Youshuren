@@ -3,7 +3,6 @@ package org.youshuren.endpoint
 import org.youshuren._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import akka.pattern.CircuitBreaker
 import org.youshuren.persistence.{BookPredicate, Database, Predicate}
 import org.youshuren.model.{Book, Rental, WeChatUser}
 import org.youshuren.codec.JsonFormats._
@@ -11,6 +10,7 @@ import org.youshuren.endpoint.Routes.Path._
 
 import scala.util.matching.Regex
 import scala.util.{Failure, Success}
+import scala.language.postfixOps
 
 /**
   * REST API specification for Youshuren back-end service.
