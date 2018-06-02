@@ -20,8 +20,8 @@ package object youshuren {
   implicit val circuitBreaker: CircuitBreaker = new CircuitBreaker(
     system.scheduler,
     maxFailures = 3,
-    callTimeout = 15 seconds,
-    resetTimeout = 1 seconds
+    callTimeout = 15.seconds,
+    resetTimeout = 1.seconds
   )
   def logger[T](clazz: Class[T]) = Logging(system, clazz)
 }
